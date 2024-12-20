@@ -120,23 +120,22 @@ if __name__ == "__main__":
     style_features = get_features(style, model)
     style_grams = [gram_matrix(feature[:-1]) for feature in style_features]
 
-    # clone content image since content image will be optimized
-    target = content.clone().requires_grad_(True).to(device)
+    # white noise image
+    target = torch.randn_like(content).requires_grad_(True).to(device)
 
-    style_weights = [1e3 / n ** 2 for n in [64, 128, 256, 512, 512]]
-    content_weight = 1  # alpha
-    style_weight = 1e6  # beta
-    optimizer = optim.Adam([target], lr=0.003)
-    steps = 2000
-    show_every = 400  # show result every 400 steps
+    w = 1/5  # w_l
+    alpha = 1  # alpha
+    beta = 1e5  # beta
+    content_weight = 1 / 2
+    style_weights = [1 / (f.shape[0]**2 * f.shape[1]**2) / 4 for f in style_features]
+    optimizer = optim.LBFGS([target])
+    steps = 500
+    show_every = 10
 
-    # iteration
-    for ii in tqdm(
-            range(1, steps + 1),
-            desc="Transfering",
-    ):
+    def closure():
+        optimizer.zero_grad()
         target_features = get_features(target, model)
-        content_loss = F.mse_loss(target_features[-1], content_features[-1])
+        content_loss = F.mse_loss(target_features[-1], content_features[-1], reduction='sum') * content_weight
         style_loss = 0
         for target_feature, style_gram, weight in zip(
                 target_features,
@@ -144,17 +143,18 @@ if __name__ == "__main__":
                 style_weights
         ):
             target_gram = gram_matrix(target_feature[:-1])
-            style_loss += F.mse_loss(target_gram, style_gram) * weight
-        total_loss = content_weight * content_loss + style_weight * style_loss
-        optimizer.zero_grad()
+            style_loss += F.mse_loss(target_gram, style_gram, reduction='sum') * weight * w
+        total_loss = alpha * content_loss + beta * style_loss
         total_loss.backward()
-        optimizer.step()
+        return total_loss
 
-        # plot
-        if ii % show_every == 0:
-            print(f"Total loss: {total_loss.item()}")
+    for i in tqdm(range(1, steps + 1)):
+        optimizer.step(closure)
+        loss = closure()
+        if i % show_every == 0:
             plt.imshow(postprocess(target))
             plt.axis("off")
+            plt.title(f"Iter {i}, Loss: {loss.item()}")
             plt.show()
 
     # save image
