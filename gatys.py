@@ -71,8 +71,7 @@ def gram_matrix(tensor):
 
 
 if __name__ == "__main__":
-    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device = torch.device("cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     image_size = 512 if device == torch.device("cuda") else 256
     img_path = './img/'
