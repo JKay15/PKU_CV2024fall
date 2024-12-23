@@ -29,11 +29,11 @@ class FeatureExtractor(nn.Module):
                 self.vgg[i] = nn.AvgPool2d(kernel_size=2, stride=2)
 
     def forward(self, x):
-        features = []
+        features = dict()
         for i, layer in enumerate(self.vgg):
             x = layer(x)
             if i in self.select:
-                features.append(x)
+                features[i] = x
         return features
 
 
@@ -57,10 +57,9 @@ def get_features(image, model):
     get feature vectors
     """
     layers = model(image)
-    features = []
-    for layer in layers:
-        feature = layer.reshape(layer.shape[1], -1)
-        features.append(feature)
+    features = dict()
+    for key, value in layers.items():
+        features[key] = value.reshape(value.shape[1], -1)
     return features
 
 
@@ -73,13 +72,13 @@ def gram_matrix(tensor):
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    image_size = 512 if device == torch.device("cuda") else 256
+    image_size = 728 if device == torch.device("cuda") else 128
     img_path = './img/'
     save_path = './results/'
-    # content_name = 'Tuebingen_Neckarfront'
-    # style_name = 'vangogh_starry_night'
-    content_name = 'content_palace'
-    style_name = 'style_vanGogh'
+    content_name = 'Tuebingen_Neckarfront'
+    style_name = 'vangogh_cut'
+    # content_name = 'content_palace'
+    # style_name = 'style_vanGogh'
     content_path = f'{img_path}{content_name}.jpg'
     style_path = f'{img_path}{style_name}.jpg'
 
@@ -88,15 +87,19 @@ if __name__ == "__main__":
         transforms.ToTensor(),
         transforms.Normalize(
             (0.485, 0.456, 0.406),
-            (1, 1, 1),
+            (0.229, 0.224, 0.225),
         ),
-        transforms.Lambda(lambda x: x[torch.LongTensor([2, 1, 0])]),
+        # transforms.Lambda(lambda x: x[torch.LongTensor([2, 1, 0])]),
         transforms.Lambda(lambda x: x.mul(255)),
     ])
 
     post_process = transforms.Compose([
         transforms.Lambda(lambda x: x.mul(1/255)),
-        transforms.Lambda(lambda x: x[torch.LongTensor([2, 1, 0])]),
+        # transforms.Lambda(lambda x: x[torch.LongTensor([2, 1, 0])]),
+        transforms.Normalize(
+            (0, 0, 0),
+            (1/0.229, 1/0.224, 1/0.225),
+        ),
         transforms.Normalize(
             (-0.485, -0.456, -0.406),
             (1, 1, 1),
@@ -120,25 +123,26 @@ if __name__ == "__main__":
     model = FeatureExtractor().to(device).eval()
 
     # get content and style features
-    content_feature = get_features(content, model)[-1]
-    style_features = get_features(style, model)[:-1]
+    content_feature = get_features(content, model)[21]
+    style_features = [get_features(style, model)[i] for i in [0, 5, 10, 19, 28]]
     style_grams = [gram_matrix(feature) for feature in style_features]
 
-    # # white noise image
-    # target = torch.randn_like(content).requires_grad_(True).to(device)
-    target = content.clone().requires_grad_(True)
+    # white noise image
+    target = torch.randn_like(content).mul(255).to(device).requires_grad_(True)
+    # target = content.clone().requires_grad_(True)
+    # target = style.clone().requires_grad_(True)
 
     content_weight = 1
     style_weights = [1e3 / n**2 for n in [64, 128, 256, 512, 512]]
     optimizer = optim.LBFGS([target])
-    steps = 100
-    show_every = 10
+    steps = 300
+    show_every = 5
 
     def closure():
         optimizer.zero_grad()
         target_features = get_features(target, model)
-        target_content = target_features[-1]
-        target_styles = target_features[:-1]
+        target_content = target_features[21]
+        target_styles = [target_features[i] for i in [0, 5, 10, 19, 28]]
         content_loss = F.mse_loss(target_content, content_feature) * content_weight
         style_loss = 0
         for target_style, style_gram, style_weight in zip(
@@ -162,5 +166,4 @@ if __name__ == "__main__":
 
     # save image
     result = post_process(target[0].cpu().detach())
-    result = Image.fromarray((result * 255).astype(np.uint8))
-    result.save(f'{save_path}{content_name}_{style_name}.jpg')
+    result.save(f"{save_path}{content_name}_{style_name}.jpg")
