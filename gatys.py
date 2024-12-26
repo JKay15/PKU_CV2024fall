@@ -89,13 +89,13 @@ if __name__ == "__main__":
             (0.485, 0.456, 0.406),
             (0.229, 0.224, 0.225),
         ),
-        # transforms.Lambda(lambda x: x[torch.LongTensor([2, 1, 0])]),
+        transforms.Lambda(lambda x: x[torch.LongTensor([2, 1, 0])]),
         transforms.Lambda(lambda x: x.mul(255)),
     ])
 
     post_process = transforms.Compose([
         transforms.Lambda(lambda x: x.mul(1/255)),
-        # transforms.Lambda(lambda x: x[torch.LongTensor([2, 1, 0])]),
+        transforms.Lambda(lambda x: x[torch.LongTensor([2, 1, 0])]),
         transforms.Normalize(
             (0, 0, 0),
             (1/0.229, 1/0.224, 1/0.225),
