@@ -1,5 +1,6 @@
 # patchmatch algorithm
 # given two images, find the best match for each patch in the source image
+# adapted from https://github.com/harveyslash/Deep-Image-Analogy-PyTorch
 
 import numpy as np
 import cv2
